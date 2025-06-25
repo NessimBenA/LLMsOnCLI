@@ -1,17 +1,27 @@
 # llm-chat
 
-A fast, minimal terminal app for LLM interactions with vim-like commands and powerful scripting capabilities.
+A fast, minimal terminal app for LLM interactions with vim-like commands, syntax highlighting, and powerful UI features.
 
 ## Features
 
+### Core Features
 - Zero configuration needed to start
 - Instant response time
 - Vim-like command interface
 - Support for multiple LLM models via OpenRouter
 - Clean, minimal TUI design
-- Automatic conversation history
+- Automatic conversation history with SQLite
 - Full-text search across past conversations
 - Visual conversation tree view
+
+### New UI/UX Features
+- **Syntax highlighting** for code blocks with automatic language detection
+- **Markdown rendering** with bold, italic, headers, lists, and blockquotes
+- **Enhanced navigation** with smooth scrolling and vim-style commands
+- **Multi-line input editing** with full cursor control
+- **Input history** with up/down arrow navigation
+- **Configurable scroll speed** for better reading experience
+- **In-conversation search** with highlighting and navigation
 
 ## Installation
 
@@ -50,6 +60,7 @@ You can also use the `:config` command within the app to open the configuration 
 - `:m <model>` - Switch to a different model
 - `:config` - Open configuration file
 - `:reload` - Reload configuration
+- `:scrollspeed <1-20>` - Set scroll speed (default: 3)
 
 ### History and Search Commands
 
@@ -58,6 +69,9 @@ You can also use the `:config` command within the app to open the configuration 
 - `:search <query>` - Search through conversation history
 - `:tree` - Toggle conversation tree view
 - `:fork <model>` - Fork current conversation with a different model
+- `/` - Search within current conversation (forward)
+- `n` - Next search result
+- `N` - Previous search result
 
 ### Conversation Forking
 
@@ -86,15 +100,52 @@ The tree view shows:
 - `i` - Enter insert mode to type a message
 - `ESC` - Return to normal mode
 - `:` - Enter command mode
+- `/` - Start search in current conversation
 
-#### Navigation
-- `j` or `↓` - Scroll down through messages
-- `k` or `↑` - Scroll up through messages
+#### Navigation (Normal Mode)
+- `j` or `↓` - Scroll down slowly
+- `k` or `↑` - Scroll up slowly
+- `J` - Fast scroll down (5x speed)
+- `K` - Fast scroll up (5x speed)
+- `f` or `PageDown` - Page down
+- `b` or `PageUp` - Page up
+- `d` - Half page down
+- `u` - Half page up
 - `G` - Jump to bottom (latest messages)
 - `g` - Jump to top
-- `ENTER` - Send message (in insert mode) or execute command (in command mode)
+- `n` - Next search result
+- `N` - Previous search result
+
+#### Input Editing (Insert Mode)
+- `Enter` - Send message
+- `Ctrl+Enter` or `Shift+Enter` - Insert newline (multi-line input)
+- `↑` - Previous line in multi-line input OR navigate input history
+- `↓` - Next line in multi-line input OR navigate input history
+- `Alt+↑` - Force navigate to previous input history
+- `Alt+↓` - Force navigate to next input history
+- `←` / `→` - Move cursor left/right
+- `Home` - Jump to start of line
+- `End` - Jump to end of line
+- `Backspace` - Delete character before cursor
 
 Note: New messages automatically scroll to the bottom when they arrive.
+
+### Enhanced Display Features
+
+#### Syntax Highlighting
+Code blocks are automatically highlighted based on the language specified:
+- Supports all major programming languages
+- Each code block is numbered for easy reference (e.g., `[1]`, `[2]`)
+- Preserves original formatting and indentation
+
+#### Markdown Rendering
+The app renders markdown elements for better readability:
+- **Bold text** using `**text**`
+- *Italic text* using `*text*`
+- Headers (`#`, `##`, `###`) with different colors
+- Lists (`-`, `*`) with bullet points
+- Blockquotes (`>`) with special styling
+- Inline code with background highlighting
 
 ### Conversation Management
 
@@ -131,7 +182,7 @@ The app provides special commands for working with code blocks (text enclosed in
 - `:copy-code` extracts all code blocks from the last message and copies them to the clipboard
 - `:export-code <filepath>` saves all code blocks from the last message to a specified file
 - When multiple code blocks exist in a message, they are separated by newlines for readability
-- Code blocks in any programming language are supported
+- Code blocks in any programming language are supported with syntax highlighting
 - The original formatting and indentation of code blocks is preserved
 
 Example of a code block that can be copied or exported:
@@ -140,6 +191,15 @@ fn main() {
     println!("Hello, World!");
 }
 ```
+
+## Tips and Tricks
+
+1. **Quick Model Switching**: Use `:m gpt-4` to quickly switch models mid-conversation
+2. **Efficient Navigation**: Combine `J`/`K` for fast scrolling and `j`/`k` for precise positioning
+3. **Multi-line Code Input**: Use `Ctrl+Enter` when typing code to preserve formatting
+4. **History Navigation**: Use arrow keys to quickly reuse previous prompts
+5. **Search and Jump**: Use `/` to search for specific content, then `n`/`N` to navigate results
+6. **Fork for Comparison**: Fork conversations to compare responses from different models
 
 ## Development
 

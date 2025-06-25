@@ -16,6 +16,8 @@ pub struct Message {
 pub struct App {
     pub messages: Vec<Message>,
     pub input: String,
+    pub input_cursor_position: usize,
+    pub input_cursor_line: usize,
     pub input_mode: InputMode,
     pub current_model: String,
     pub should_quit: bool,
@@ -24,6 +26,13 @@ pub struct App {
     pub current_conversation_id: Option<i64>,
     pub show_tree: bool,
     pub scroll_offset: u16,
+    pub scroll_speed: u16,
+    pub search_query: String,
+    pub search_mode: bool,
+    pub search_results: Vec<usize>,
+    pub current_search_index: usize,
+    pub input_history: Vec<String>,
+    pub history_index: Option<usize>,
     config: Config,
     client: Option<OpenRouterClient>,
 }
@@ -46,6 +55,8 @@ impl App {
         Ok(Self {
             messages: Vec::new(),
             input: String::new(),
+            input_cursor_position: 0,
+            input_cursor_line: 0,
             input_mode: InputMode::Normal,
             current_model: config.default_model.clone().unwrap_or_else(|| String::from("anthropic/claude-3.5-sonnet")),
             should_quit: false,
@@ -54,6 +65,13 @@ impl App {
             current_conversation_id: None,
             show_tree: false,
             scroll_offset: 0,
+            scroll_speed: 3,
+            search_query: String::new(),
+            search_mode: false,
+            search_results: Vec::new(),
+            current_search_index: 0,
+            input_history: Vec::new(),
+            history_index: None,
             config,
             client,
         })
@@ -93,10 +111,34 @@ impl App {
             }
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Char('j') | KeyCode::Down => {
-                self.scroll_offset = self.scroll_offset.saturating_add(1);
+                self.scroll_offset = self.scroll_offset.saturating_add(self.scroll_speed);
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.scroll_offset = self.scroll_offset.saturating_sub(1);
+                self.scroll_offset = self.scroll_offset.saturating_sub(self.scroll_speed);
+            }
+            KeyCode::Char('J') => {
+                // Fast scroll down
+                self.scroll_offset = self.scroll_offset.saturating_add(self.scroll_speed * 5);
+            }
+            KeyCode::Char('K') => {
+                // Fast scroll up
+                self.scroll_offset = self.scroll_offset.saturating_sub(self.scroll_speed * 5);
+            }
+            KeyCode::PageDown | KeyCode::Char('f') => {
+                // Page down
+                self.scroll_offset = self.scroll_offset.saturating_add(20);
+            }
+            KeyCode::PageUp | KeyCode::Char('b') => {
+                // Page up
+                self.scroll_offset = self.scroll_offset.saturating_sub(20);
+            }
+            KeyCode::Char('d') => {
+                // Half page down
+                self.scroll_offset = self.scroll_offset.saturating_add(10);
+            }
+            KeyCode::Char('u') => {
+                // Half page up
+                self.scroll_offset = self.scroll_offset.saturating_sub(10);
             }
             KeyCode::Char('G') => {
                 // Scroll to bottom (we'll calculate the actual max in the UI)
@@ -106,23 +148,146 @@ impl App {
                 // Scroll to top
                 self.scroll_offset = 0;
             }
+            KeyCode::Char('/') => {
+                // Start search
+                self.search_mode = true;
+                self.input_mode = InputMode::Command;
+                self.input.clear();
+                self.input.push('/');
+            }
+            KeyCode::Char('n') => {
+                // Next search result
+                if !self.search_results.is_empty() {
+                    self.current_search_index = (self.current_search_index + 1) % self.search_results.len();
+                    self.jump_to_message(self.search_results[self.current_search_index]);
+                }
+            }
+            KeyCode::Char('N') => {
+                // Previous search result
+                if !self.search_results.is_empty() {
+                    if self.current_search_index == 0 {
+                        self.current_search_index = self.search_results.len() - 1;
+                    } else {
+                        self.current_search_index -= 1;
+                    }
+                    self.jump_to_message(self.search_results[self.current_search_index]);
+                }
+            }
             _ => {}
         }
     }
 
     async fn handle_editing_mode(&mut self, key: KeyEvent) -> Result<()> {
-        match key.code {
-            KeyCode::Esc => self.input_mode = InputMode::Normal,
-            KeyCode::Enter => {
+        use crossterm::event::KeyModifiers;
+        
+        match (key.code, key.modifiers) {
+            (KeyCode::Esc, _) => {
+                self.input_mode = InputMode::Normal;
+                self.input_cursor_position = 0;
+                self.input_cursor_line = 0;
+            }
+            (KeyCode::Enter, KeyModifiers::NONE) => {
                 if !self.input.trim().is_empty() {
                     self.submit_message().await?;
+                    self.input_cursor_position = 0;
+                    self.input_cursor_line = 0;
                 }
             }
-            KeyCode::Char(c) => {
-                self.input.push(c);
+            (KeyCode::Enter, KeyModifiers::CONTROL) | (KeyCode::Enter, KeyModifiers::SHIFT) => {
+                // Insert newline
+                let pos = self.get_absolute_cursor_position();
+                self.input.insert(pos, '\n');
+                self.input_cursor_position = 0;
+                self.input_cursor_line += 1;
             }
-            KeyCode::Backspace => {
-                self.input.pop();
+            (KeyCode::Char(c), _) => {
+                let pos = self.get_absolute_cursor_position();
+                self.input.insert(pos, c);
+                self.input_cursor_position += 1;
+            }
+            (KeyCode::Backspace, _) => {
+                let pos = self.get_absolute_cursor_position();
+                if pos > 0 {
+                    let removed = self.input.remove(pos - 1);
+                    if removed == '\n' {
+                        // Moving to previous line
+                        self.input_cursor_line = self.input_cursor_line.saturating_sub(1);
+                        let lines: Vec<&str> = self.input.lines().collect();
+                        if self.input_cursor_line < lines.len() {
+                            self.input_cursor_position = lines[self.input_cursor_line].len();
+                        }
+                    } else {
+                        self.input_cursor_position = self.input_cursor_position.saturating_sub(1);
+                    }
+                }
+            }
+            (KeyCode::Left, _) => {
+                if self.input_cursor_position > 0 {
+                    self.input_cursor_position -= 1;
+                } else if self.input_cursor_line > 0 {
+                    // Move to end of previous line
+                    self.input_cursor_line -= 1;
+                    let lines: Vec<&str> = self.input.lines().collect();
+                    if self.input_cursor_line < lines.len() {
+                        self.input_cursor_position = lines[self.input_cursor_line].len();
+                    }
+                }
+            }
+            (KeyCode::Right, _) => {
+                let lines: Vec<&str> = self.input.lines().collect();
+                if self.input_cursor_line < lines.len() {
+                    let current_line_len = lines[self.input_cursor_line].len();
+                    if self.input_cursor_position < current_line_len {
+                        self.input_cursor_position += 1;
+                    } else if self.input_cursor_line < lines.len() - 1 {
+                        // Move to start of next line
+                        self.input_cursor_line += 1;
+                        self.input_cursor_position = 0;
+                    }
+                }
+            }
+            (KeyCode::Up, KeyModifiers::NONE) => {
+                let lines: Vec<&str> = self.input.lines().collect();
+                if lines.len() <= 1 {
+                    // Single line - navigate history
+                    self.navigate_history_backward();
+                } else if self.input_cursor_line > 0 {
+                    // Multi-line - move cursor up
+                    self.input_cursor_line -= 1;
+                    if self.input_cursor_line < lines.len() {
+                        let line_len = lines[self.input_cursor_line].len();
+                        self.input_cursor_position = self.input_cursor_position.min(line_len);
+                    }
+                }
+            }
+            (KeyCode::Down, KeyModifiers::NONE) => {
+                let lines: Vec<&str> = self.input.lines().collect();
+                if lines.len() <= 1 {
+                    // Single line - navigate history
+                    self.navigate_history_forward();
+                } else if self.input_cursor_line < lines.len() - 1 {
+                    // Multi-line - move cursor down
+                    self.input_cursor_line += 1;
+                    let line_len = lines[self.input_cursor_line].len();
+                    self.input_cursor_position = self.input_cursor_position.min(line_len);
+                }
+            }
+            (KeyCode::Up, KeyModifiers::ALT) => {
+                // Force history navigation even in multi-line
+                self.navigate_history_backward();
+            }
+            (KeyCode::Down, KeyModifiers::ALT) => {
+                // Force history navigation even in multi-line
+                self.navigate_history_forward();
+            }
+            (KeyCode::Home, _) => {
+                self.input_cursor_position = 0;
+            }
+            (KeyCode::End, _) => {
+                let lines: Vec<&str> = self.input.lines().collect();
+                if self.input_cursor_line < lines.len() {
+                    self.input_cursor_position = lines[self.input_cursor_line].len();
+                }
             }
             _ => {}
         }
@@ -154,6 +319,12 @@ impl App {
     }
 
     async fn submit_message(&mut self) -> Result<()> {
+        // Save to history
+        if !self.input.trim().is_empty() {
+            self.input_history.push(self.input.clone());
+            self.history_index = None;
+        }
+        
         // Reset scroll position when submitting a new message
         self.scroll_offset = 0;
         let user_message = Message {
@@ -218,6 +389,14 @@ impl App {
     }
 
     async fn execute_command(&mut self) -> Result<()> {
+        if self.search_mode && self.input.starts_with('/') {
+            // Handle search
+            self.search_query = self.input[1..].to_string();
+            self.perform_search();
+            self.search_mode = false;
+            return Ok(());
+        }
+        
         let cmd = self.input.trim_start_matches(':');
         match cmd {
             "q" | "quit" => self.should_quit = true,
@@ -568,6 +747,24 @@ impl App {
                     }
                 }
             }
+            cmd if cmd.starts_with("scrollspeed ") => {
+                if let Ok(speed) = cmd.trim_start_matches("scrollspeed ").trim().parse::<u16>() {
+                    self.scroll_speed = speed.max(1).min(20);
+                    let message = Message {
+                        role: String::from("system"),
+                        content: format!("Scroll speed set to {}", self.scroll_speed),
+                        timestamp: chrono::Local::now(),
+                    };
+                    self.messages.push(message);
+                } else {
+                    let error_message = Message {
+                        role: String::from("system"),
+                        content: String::from("Invalid scroll speed. Please use a number between 1 and 20."),
+                        timestamp: chrono::Local::now(),
+                    };
+                    self.messages.push(error_message);
+                }
+            }
             _ => {
                 let error_message = Message {
                     role: String::from("system"),
@@ -578,5 +775,87 @@ impl App {
             }
         }
         Ok(())
+    }
+    
+    fn jump_to_message(&mut self, message_index: usize) {
+        // Calculate the scroll offset to show the message
+        // This is a simplified version - in a real implementation,
+        // we'd need to calculate based on actual rendered line counts
+        let lines_per_message = 5; // Estimate
+        self.scroll_offset = (message_index * lines_per_message) as u16;
+    }
+    
+    fn perform_search(&mut self) {
+        self.search_results.clear();
+        if self.search_query.is_empty() {
+            return;
+        }
+        
+        let query = self.search_query.to_lowercase();
+        for (i, message) in self.messages.iter().enumerate() {
+            if message.content.to_lowercase().contains(&query) {
+                self.search_results.push(i);
+            }
+        }
+        
+        if !self.search_results.is_empty() {
+            self.current_search_index = 0;
+            self.jump_to_message(self.search_results[0]);
+        }
+    }
+    
+    fn get_absolute_cursor_position(&self) -> usize {
+        let lines: Vec<&str> = self.input.lines().collect();
+        let mut position = 0;
+        
+        for i in 0..self.input_cursor_line.min(lines.len()) {
+            position += lines[i].len() + 1; // +1 for newline
+        }
+        
+        position + self.input_cursor_position
+    }
+    
+    fn navigate_history_backward(&mut self) {
+        if self.input_history.is_empty() {
+            return;
+        }
+        
+        match self.history_index {
+            None => {
+                // Save current input before navigating
+                self.history_index = Some(self.input_history.len() - 1);
+                self.input = self.input_history[self.input_history.len() - 1].clone();
+            }
+            Some(index) if index > 0 => {
+                self.history_index = Some(index - 1);
+                self.input = self.input_history[index - 1].clone();
+            }
+            _ => return,
+        }
+        
+        // Reset cursor to end of input
+        let lines: Vec<&str> = self.input.lines().collect();
+        self.input_cursor_line = lines.len().saturating_sub(1);
+        self.input_cursor_position = lines.last().map(|l| l.len()).unwrap_or(0);
+    }
+    
+    fn navigate_history_forward(&mut self) {
+        match self.history_index {
+            Some(index) if index < self.input_history.len() - 1 => {
+                self.history_index = Some(index + 1);
+                self.input = self.input_history[index + 1].clone();
+            }
+            Some(index) if index == self.input_history.len() - 1 => {
+                // Return to original input
+                self.history_index = None;
+                self.input.clear();
+            }
+            _ => return,
+        }
+        
+        // Reset cursor to end of input
+        let lines: Vec<&str> = self.input.lines().collect();
+        self.input_cursor_line = lines.len().saturating_sub(1);
+        self.input_cursor_position = lines.last().map(|l| l.len()).unwrap_or(0);
     }
 }

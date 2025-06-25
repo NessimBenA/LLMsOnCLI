@@ -6,10 +6,12 @@ use ratatui::{
     Frame,
 };
 use std::rc::Rc;
+use unicode_width::UnicodeWidthStr;
 
 use crate::app::{App, InputMode};
 
 mod chat;
+mod syntax;
 
 pub fn draw(f: &mut Frame, app: &App) {
     let chunks = if app.show_tree {
@@ -29,7 +31,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         .constraints([
             Constraint::Min(1),
             Constraint::Length(1),
-            Constraint::Length(3),
+            Constraint::Length(5),
         ])
         .split(chunks[0]);
 
@@ -199,14 +201,42 @@ fn draw_status_line(f: &mut Frame, app: &App, area: Rect) {
 fn draw_input(f: &mut Frame, app: &App, area: Rect) {
     let input_block = Block::default()
         .borders(Borders::ALL)
-        .title("Input");
+        .title(match app.input_mode {
+            InputMode::Editing => "Input (Ctrl+Enter for newline)",
+            InputMode::Command => "Command",
+            InputMode::Normal => "Input",
+        });
 
     let input = Paragraph::new(app.input.as_str())
         .style(match app.input_mode {
             InputMode::Editing | InputMode::Command => Style::default().fg(Color::Yellow),
             InputMode::Normal => Style::default(),
         })
-        .block(input_block);
+        .block(input_block)
+        .wrap(Wrap { trim: false });
 
     f.render_widget(input, area);
+    
+    // Show cursor position when in editing mode
+    if matches!(app.input_mode, InputMode::Editing | InputMode::Command) {
+        let cursor_x = if app.input.is_empty() {
+            area.x + 1
+        } else {
+            let lines: Vec<&str> = app.input.lines().collect();
+            let cursor_x_offset = if app.input_cursor_line < lines.len() {
+                let line = lines[app.input_cursor_line];
+                let chars_before_cursor: String = line.chars().take(app.input_cursor_position).collect();
+                chars_before_cursor.width() as u16
+            } else {
+                0
+            };
+            area.x + 1 + cursor_x_offset
+        };
+        
+        let cursor_y = area.y + 1 + app.input_cursor_line as u16;
+        
+        if cursor_x < area.x + area.width - 1 && cursor_y < area.y + area.height - 1 {
+            f.set_cursor(cursor_x, cursor_y);
+        }
+    }
 }
