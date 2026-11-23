@@ -1,53 +1,38 @@
 use anyhow::Result;
 use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture},
+    event::{DisableMouseCapture, EnableMouseCapture, EventStream},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use futures::StreamExt;
 use ratatui::prelude::*;
 use std::io;
 
-mod app;
-mod ui;
-mod commands;
 mod api;
+mod app;
+mod commands;
 mod config;
 mod history;
-
-use history::init_db;
+mod ui;
 
 use crate::app::App;
+use crate::config::Config;
+use crate::history::History;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize database
-    init_db()?;
+    let config = Config::load()?;
+    let history = History::open_default()?;
+    let mut app = App::new(config, history);
 
-    // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Create app and run it
-    let app = match App::new() {
-        Ok(app) => app,
-        Err(e) => {
-            disable_raw_mode()?;
-            execute!(
-                terminal.backend_mut(),
-                LeaveAlternateScreen,
-                DisableMouseCapture
-            )?;
-            terminal.show_cursor()?;
-            eprintln!("Error initializing app: {}", e);
-            std::process::exit(1);
-        }
-    };
-    let res = run_app(&mut terminal, app).await;
+    let result = run_app(&mut terminal, &mut app).await;
 
-    // Restore terminal
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -56,23 +41,21 @@ async fn main() -> Result<()> {
     )?;
     terminal.show_cursor()?;
 
-    if let Err(err) = res {
-        println!("Error: {err:?}");
-    }
-
-    Ok(())
+    result
 }
 
-async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<()> {
-    loop {
-        terminal.draw(|f| ui::draw(f, &app))?;
+async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
+    let mut events = EventStream::new();
+    while !app.should_quit {
+        terminal.draw(|f| ui::draw(f, app))?;
 
-        if app.should_quit {
-            return Ok(());
-        }
-
-        if let Some(event) = app.handle_events().await? {
-            app.handle_input(event).await?;
+        tokio::select! {
+            event = events.next() => match event {
+                Some(event) => app.handle_input(event?),
+                None => break,
+            },
+            event = app.next_stream_event() => app.handle_stream_event(event),
         }
     }
+    Ok(())
 }
