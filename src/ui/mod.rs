@@ -99,7 +99,11 @@ fn push_branch(
     current_id: i64,
 ) {
     let branch = if is_last { "└──" } else { "├──" };
-    let marker = if conversation.id == current_id { "* " } else { "" };
+    let marker = if conversation.id == current_id {
+        "* "
+    } else {
+        ""
+    };
     let title = conversation.title.lines().next().unwrap_or_default();
     text.push_str(&format!(
         "{prefix}{branch} {marker}{title} [{}]\n",
@@ -122,9 +126,7 @@ fn push_branch(
 }
 
 fn draw_messages(f: &mut Frame, app: &App, area: Rect) {
-    let messages_block = Block::default()
-        .borders(Borders::ALL)
-        .title("Messages");
+    let messages_block = Block::default().borders(Borders::ALL).title("Messages");
 
     let messages = chat::format_messages(app.messages.iter().chain(app.pending_reply()));
 
@@ -262,7 +264,10 @@ mod tests {
     │   └── * Explain ownership (fork) (fork) [anthropic/claude-3.5-sonnet]
     └── Explain ownership (fork) [openai/gpt-4]
 ";
-        assert_eq!(tree_text(&history.conversation_tree(nested)?, nested), expected);
+        assert_eq!(
+            tree_text(&history.conversation_tree(nested)?, nested),
+            expected
+        );
         Ok(())
     }
 }
