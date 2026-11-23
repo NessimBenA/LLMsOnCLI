@@ -8,7 +8,7 @@ pub fn copy_to_clipboard(content: &str) -> Result<()> {
         Ok(ctx) => ctx,
         Err(e) => anyhow::bail!("Failed to initialize clipboard: {}", e),
     };
-    
+
     if let Err(e) = ctx.set_contents(content.to_owned()) {
         anyhow::bail!("Failed to set clipboard contents: {}", e);
     }
