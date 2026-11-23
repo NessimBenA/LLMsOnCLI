@@ -6,7 +6,7 @@ use ratatui::{
 use crate::app::Message;
 use super::syntax::{extract_code_blocks, highlight_code_block};
 
-pub fn format_messages(messages: &[Message]) -> Text<'static> {
+pub fn format_messages<'a>(messages: impl IntoIterator<Item = &'a Message>) -> Text<'static> {
     let mut text = Text::default();
     
     for message in messages {
