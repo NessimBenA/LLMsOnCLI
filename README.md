@@ -1,226 +1,122 @@
 # llm-chat
 
-A fast, minimal terminal app for LLM interactions with vim-like commands, syntax highlighting, and powerful UI features.
+A terminal chat client for [OpenRouter](https://openrouter.ai). You type in a vim-style interface, the reply streams in as the model writes it, and every conversation is saved to a local SQLite database that you can search. You can fork a conversation to another model and compare the branches.
 
 ## Features
 
-### Core Features
-- Zero configuration needed to start
-- Instant response time
-- Vim-like command interface
-- Support for multiple LLM models via OpenRouter
-- Clean, minimal TUI design
-- Automatic conversation history with SQLite
-- Full-text search across past conversations
-- Visual conversation tree view
+- Replies stream in as they are generated. The interface stays live while you wait: you can scroll, start typing the next message, or cancel the reply with Ctrl+C.
+- Normal, insert and command modes, with vim keys for scrolling and searching.
+- Any model available on OpenRouter. Switch with `:m <model>`.
+- Every exchange is saved to SQLite. `:search` runs a full-text search over all saved conversations.
+- `:fork <model>` copies the current conversation into a new branch that uses another model. `:tree` shows all the branches.
+- Syntax highlighting for fenced code blocks, and basic Markdown: headers, lists, bold, italic, inline code and quotes.
+- Copy the last reply or its code blocks to the clipboard, or write the code blocks to a file.
 
-### New UI/UX Features
-- **Syntax highlighting** for code blocks with automatic language detection
-- **Markdown rendering** with bold, italic, headers, lists, and blockquotes
-- **Enhanced navigation** with smooth scrolling and vim-style commands
-- **Multi-line input editing** with full cursor control
-- **Input history** with up/down arrow navigation
-- **Configurable scroll speed** for better reading experience
-- **In-conversation search** with highlighting and navigation
+## Install
 
-## Installation
+You need a Rust toolchain (see https://rustup.rs). On Linux you also need a C compiler, `pkg-config` and the OpenSSL headers (`libssl-dev` on Debian and Ubuntu).
 
-### From Source
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/llm-chat
-cd llm-chat
-
-# Build and install
-cargo install --path .
+```sh
+cargo install --git https://github.com/NessimBenA/LLMsOnCLI
 ```
+
+This installs a binary called `llm-chat`. Add `--locked` to build with the exact dependency versions from `Cargo.lock`.
+
+## API key
+
+Get a key from https://openrouter.ai/keys and put it in the `OPENROUTER_API_KEY` environment variable before you start the app. This reads it without echoing it or saving it in your shell history:
+
+```sh
+read -rs OPENROUTER_API_KEY && export OPENROUTER_API_KEY
+llm-chat
+```
+
+To set it for every session, export it from your shell profile instead.
 
 ## Configuration
 
-Create a configuration file at `~/.config/llm-chat/config.toml`:
+The config file is optional. It lives at `~/.config/llm-chat/config.toml` on Linux and `~/Library/Application Support/llm-chat/config.toml` on macOS, and takes two keys:
+
+- `default_model`: the model to start with. Without it the app uses `anthropic/claude-3.5-sonnet`.
+- `api_key`: your OpenRouter key, used only when `OPENROUTER_API_KEY` is not set.
 
 ```toml
-api_key = "your-openrouter-api-key"
-default_model = "anthropic/claude-3.5-sonnet"  # optional, defaults to claude-3.5-sonnet
+default_model = "openai/gpt-4o"
 ```
 
-You can also use the `:config` command within the app to open the configuration file.
+`:config` opens the file with `xdg-open` and `:reload` reads it again.
 
-## Usage
+## Keybindings
 
-### Basic Commands
+The app starts in normal mode. Press `i` to type a message and `Esc` to go back.
 
-- `i` - Enter insert mode to type a message
-- `:copy` - Copy the last message to clipboard
-- `:copy-code` - Copy all code blocks from the last message to clipboard
-- `:export-code <filepath>` - Export all code blocks from the last message to a file
-- `:q` or `:quit` - Quit the application
-- `:c` or `:clear` - Clear chat history
-- `:m <model>` - Switch to a different model
-- `:config` - Open configuration file
-- `:reload` - Reload configuration
-- `:scrollspeed <1-20>` - Set scroll speed (default: 3)
+Normal mode:
 
-### History and Search Commands
+| Key | Action |
+| --- | --- |
+| `i` | Insert mode |
+| `:` | Command mode |
+| `/` | Search the current conversation |
+| `n` / `N` | Next / previous search match |
+| `j` / `k`, `Down` / `Up` | Scroll down / up by the scroll speed (3 lines by default) |
+| `J` / `K` | Scroll five times faster |
+| `d` / `u` | Scroll down / up 10 lines |
+| `f` / `b`, `PageDown` / `PageUp` | Scroll down / up 20 lines |
+| `G` / `g` | Jump to the bottom / top |
+| `q` | Quit |
 
-- `:list` - Show recent conversations
-- `:load <id>` - Load a specific conversation
-- `:search <query>` - Search through conversation history
-- `:tree` - Toggle conversation tree view
-- `:fork <model>` - Fork current conversation with a different model
-- `/` - Search within current conversation (forward)
-- `n` - Next search result
-- `N` - Previous search result
+Insert mode:
 
-### Conversation Forking
+| Key | Action |
+| --- | --- |
+| `Enter` | Send the message |
+| `Alt+Enter`, `Ctrl+J` | New line. `Ctrl+Enter` and `Shift+Enter` also work in terminals that send them as separate keys |
+| `Left` / `Right`, `Home` / `End` | Move the cursor |
+| `Up` / `Down` | Move between lines, or step through sent messages when the input has one line |
+| `Alt+Up` / `Alt+Down` | Step through sent messages |
+| `Backspace` | Delete the character before the cursor |
+| `Esc` | Back to normal mode |
 
-The app supports creating conversation branches with different models:
+In any mode, `Ctrl+C` cancels the reply that is streaming and keeps the part that already arrived. In command mode, `Enter` runs the command and `Esc` drops it.
 
-1. Start a conversation normally
-2. Use `:fork <model>` to create a branch with a different model (e.g., `:fork claude-2`)
-3. Use `:tree` to visualize the conversation hierarchy
-4. Use `:load <id>` to switch between conversations in the tree
+## Commands
 
-The tree view shows:
-- Parent-child relationships between conversations
-- Current conversation marked with an asterisk (*)
-- Model information when different from the default
-- Visual branches using ASCII characters
+| Command | Action |
+| --- | --- |
+| `:m <model>` | Switch model, for example `:m openai/gpt-4o` |
+| `:fork <model>` | Copy the current conversation into a new branch that uses `<model>` |
+| `:tree` | Show or hide the conversation tree |
+| `:list` | List the 10 most recent conversations |
+| `:search <words>` | List saved conversations with a message that contains all the words |
+| `:load <id>` | Open a saved conversation |
+| `:c`, `:clear` | Start a new conversation |
+| `:copy` | Copy the last reply to the clipboard |
+| `:copy-code` | Copy the code blocks of the last reply |
+| `:export-code <file>` | Write the code blocks of the last reply to a file |
+| `:scrollspeed <1-20>` | Set how many lines `j` and `k` scroll |
+| `:config` | Open the config file |
+| `:reload` | Reload the config file |
+| `:q`, `:quit` | Quit |
 
-### Input Modes
+While a reply is streaming, `:clear`, `:load` and `:fork` are refused. Let the reply finish or cancel it first.
 
-- **Normal Mode** - Default mode for navigation
-- **Insert Mode** - For typing messages (enter with `i`)
-- **Command Mode** - For executing commands (enter with `:`)
+## History and forks
 
-### Keyboard Shortcuts
+Conversations are saved in `history.db`, next to the config file. A conversation is saved when its first reply arrives, and each later exchange is added to it. Messages from the app itself, such as errors and command output, are not saved and are not sent to the model.
 
-#### Mode Switching
-- `i` - Enter insert mode to type a message
-- `ESC` - Return to normal mode
-- `:` - Enter command mode
-- `/` - Start search in current conversation
-
-#### Navigation (Normal Mode)
-- `j` or `↓` - Scroll down slowly
-- `k` or `↑` - Scroll up slowly
-- `J` - Fast scroll down (5x speed)
-- `K` - Fast scroll up (5x speed)
-- `f` or `PageDown` - Page down
-- `b` or `PageUp` - Page up
-- `d` - Half page down
-- `u` - Half page up
-- `G` - Jump to bottom (latest messages)
-- `g` - Jump to top
-- `n` - Next search result
-- `N` - Previous search result
-
-#### Input Editing (Insert Mode)
-- `Enter` - Send message
-- `Ctrl+Enter` or `Shift+Enter` - Insert newline (multi-line input)
-- `↑` - Previous line in multi-line input OR navigate input history
-- `↓` - Next line in multi-line input OR navigate input history
-- `Alt+↑` - Force navigate to previous input history
-- `Alt+↓` - Force navigate to next input history
-- `←` / `→` - Move cursor left/right
-- `Home` - Jump to start of line
-- `End` - Jump to end of line
-- `Backspace` - Delete character before cursor
-
-Note: New messages automatically scroll to the bottom when they arrive.
-
-### Enhanced Display Features
-
-#### Syntax Highlighting
-Code blocks are automatically highlighted based on the language specified:
-- Supports all major programming languages
-- Each code block is numbered for easy reference (e.g., `[1]`, `[2]`)
-- Preserves original formatting and indentation
-
-#### Markdown Rendering
-The app renders markdown elements for better readability:
-- **Bold text** using `**text**`
-- *Italic text* using `*text*`
-- Headers (`#`, `##`, `###`) with different colors
-- Lists (`-`, `*`) with bullet points
-- Blockquotes (`>`) with special styling
-- Inline code with background highlighting
-
-### Conversation Management
-
-Conversations are automatically saved to `~/.config/llm-chat/history.db`. Each conversation is assigned a unique ID that can be used to load it later. The conversation tree view (`:tree`) shows the hierarchical structure of conversations, including:
-
-- Main conversation threads (root conversations)
-- Forked conversations with different models
-- Parent-child relationships using ASCII tree structure (`├──`, `└──`, `│`)
-- Current active conversation marked with an asterisk (*)
-- Model information in brackets (e.g., `[claude-2]`) when different from default
-
-The tree structure makes it easy to:
-- Experiment with different models on the same conversation
-- Compare responses from different models
-- Maintain multiple conversation branches
-- Navigate between related conversations
-
-Example tree view:
-```
-Conversation tree:
-
-└── Initial conversation
-    ├── Fork with Claude [anthropic/claude-3.5-sonnet]
-    │   └── * Current conversation branch
-    └── Alternative approach [claude-2]
-```
-
-Search functionality supports full-text search across all conversations, making it easy to find past discussions or code snippets. Search results include conversation IDs that can be used with `:load` to jump to specific points in the conversation tree.
-
-### Code Block Management
-
-The app provides special commands for working with code blocks (text enclosed in triple backticks):
-
-- `:copy-code` extracts all code blocks from the last message and copies them to the clipboard
-- `:export-code <filepath>` saves all code blocks from the last message to a specified file
-- When multiple code blocks exist in a message, they are separated by newlines for readability
-- Code blocks in any programming language are supported with syntax highlighting
-- The original formatting and indentation of code blocks is preserved
-
-Example of a code block that can be copied or exported:
-```rust
-fn main() {
-    println!("Hello, World!");
-}
-```
-
-## Tips and Tricks
-
-1. **Quick Model Switching**: Use `:m gpt-4` to quickly switch models mid-conversation
-2. **Efficient Navigation**: Combine `J`/`K` for fast scrolling and `j`/`k` for precise positioning
-3. **Multi-line Code Input**: Use `Ctrl+Enter` when typing code to preserve formatting
-4. **History Navigation**: Use arrow keys to quickly reuse previous prompts
-5. **Search and Jump**: Use `/` to search for specific content, then `n`/`N` to navigate results
-6. **Fork for Comparison**: Fork conversations to compare responses from different models
+`:fork <model>` saves a copy of the current conversation as a child of it and switches to the new model, so the next messages go to the branch and the original stays as it was. `:tree` shows the whole family of the current conversation, with the model of each branch and a `*` on the one you are in. Use `:list` or `:search` to find an ID and `:load <id>` to move between branches.
 
 ## Development
 
-### Prerequisites
-
-- Rust 1.70 or higher
-- Cargo
-- SQLite 3.x
-
-### Building
-
-```bash
+```sh
+cargo fmt --check
+cargo clippy -- -D warnings
+cargo test
 cargo build --release
 ```
 
-### Running Tests
-
-```bash
-cargo test
-```
+The stream parser follows OpenRouter's streaming documentation (https://openrouter.ai/docs/api_reference/streaming), and its tests use the chunk formats shown there.
 
 ## License
 
-MIT License
+MIT. See [LICENSE](LICENSE).
