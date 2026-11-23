@@ -1,28 +1,17 @@
-use anyhow::Result;
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 mod openrouter;
 
-#[derive(Debug, Serialize, Deserialize)]
+pub use openrouter::OpenRouterClient;
+
+#[derive(Debug, Serialize)]
 pub struct ChatMessage {
     pub role: String,
     pub content: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ChatResponse {
-    pub choices: Vec<Choice>,
+#[derive(Debug)]
+pub enum StreamEvent {
+    Delta(String),
+    Finished(anyhow::Result<()>),
 }
-
-#[derive(Debug, Deserialize)]
-pub struct Choice {
-    pub message: ChatMessage,
-}
-
-#[async_trait]
-pub trait LLMClient {
-    async fn chat(&self, messages: Vec<ChatMessage>, model: &str) -> Result<ChatResponse>;
-}
-
-pub use openrouter::OpenRouterClient;
