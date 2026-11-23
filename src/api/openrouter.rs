@@ -139,8 +139,9 @@ fn parse_data(data: &str) -> Result<Option<StreamItem>> {
     if data == "[DONE]" {
         return Ok(Some(StreamItem::Done));
     }
-    let chunk: StreamChunk = serde_json::from_str(data)
-        .with_context(|| format!("OpenRouter sent a stream chunk that is not valid JSON: {data}"))?;
+    let chunk: StreamChunk = serde_json::from_str(data).with_context(|| {
+        format!("OpenRouter sent a stream chunk that is not valid JSON: {data}")
+    })?;
     if let Some(error) = chunk.error {
         bail!("OpenRouter stopped the reply: {}", error.message);
     }
@@ -182,10 +183,7 @@ mod tests {
 }"#;
 
     fn content_chunk(content: &str) -> String {
-        CONTENT_CHUNK.replace(
-            r#""Hello""#,
-            &serde_json::Value::from(content).to_string(),
-        )
+        CONTENT_CHUNK.replace(r#""Hello""#, &serde_json::Value::from(content).to_string())
     }
 
     fn events(lines: &[&str]) -> String {
