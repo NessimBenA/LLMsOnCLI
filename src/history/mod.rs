@@ -79,7 +79,12 @@ impl History {
         self.insert_conversation(title, model, None, messages)
     }
 
-    pub fn fork_conversation(&self, parent_id: i64, model: &str, messages: &[Message]) -> Result<i64> {
+    pub fn fork_conversation(
+        &self,
+        parent_id: i64,
+        model: &str,
+        messages: &[Message],
+    ) -> Result<i64> {
         let parent_title: String = self.conn.query_row(
             "SELECT title FROM conversations WHERE id = ?1",
             params![parent_id],
@@ -289,7 +294,11 @@ mod tests {
         })
         .collect();
 
-        let id = history.save_conversation("How do I read a file in Rust?", "openai/gpt-4o", &messages)?;
+        let id = history.save_conversation(
+            "How do I read a file in Rust?",
+            "openai/gpt-4o",
+            &messages,
+        )?;
         let (conversation, loaded) = history.load_conversation(id)?;
 
         assert_eq!(conversation.id, id);
@@ -307,11 +316,17 @@ mod tests {
         let id = history.save_conversation(
             "first question",
             "openai/gpt-4o",
-            &[message("user", "first question"), message("assistant", "first answer")],
+            &[
+                message("user", "first question"),
+                message("assistant", "first answer"),
+            ],
         )?;
         history.append_messages(
             id,
-            &[message("user", "second question"), message("assistant", "second answer")],
+            &[
+                message("user", "second question"),
+                message("assistant", "second answer"),
+            ],
         )?;
 
         let (_, loaded) = history.load_conversation(id)?;
@@ -335,9 +350,12 @@ mod tests {
     #[test]
     fn recent_conversations_come_newest_first_up_to_the_limit() -> Result<()> {
         let history = History::open_in_memory()?;
-        let first = history.save_conversation("first", "openai/gpt-4o", &[message("user", "first")])?;
-        let second = history.save_conversation("second", "openai/gpt-4o", &[message("user", "second")])?;
-        let third = history.save_conversation("third", "openai/gpt-4o", &[message("user", "third")])?;
+        let first =
+            history.save_conversation("first", "openai/gpt-4o", &[message("user", "first")])?;
+        let second =
+            history.save_conversation("second", "openai/gpt-4o", &[message("user", "second")])?;
+        let third =
+            history.save_conversation("third", "openai/gpt-4o", &[message("user", "third")])?;
 
         let ids: Vec<i64> = history
             .list_recent_conversations(2)?
@@ -394,7 +412,11 @@ mod tests {
     #[test]
     fn search_sees_messages_appended_later() -> Result<()> {
         let history = History::open_in_memory()?;
-        let id = history.save_conversation("question", "openai/gpt-4o", &[message("user", "question")])?;
+        let id = history.save_conversation(
+            "question",
+            "openai/gpt-4o",
+            &[message("user", "question")],
+        )?;
         assert!(history.search_conversations("tokio")?.is_empty());
 
         history.append_messages(id, &[message("assistant", "Spawn a tokio task.")])?;
@@ -414,7 +436,11 @@ mod tests {
             message("user", "Explain ownership"),
             message("assistant", "Every value has a single owner."),
         ];
-        let parent = history.save_conversation("Explain ownership", "anthropic/claude-3.5-sonnet", &shared)?;
+        let parent = history.save_conversation(
+            "Explain ownership",
+            "anthropic/claude-3.5-sonnet",
+            &shared,
+        )?;
         let fork = history.fork_conversation(parent, "openai/gpt-4o", &shared)?;
         history.append_messages(fork, &[message("user", "Now explain borrowing")])?;
 
@@ -448,8 +474,16 @@ mod tests {
     #[test]
     fn tree_holds_every_branch_of_the_family() -> Result<()> {
         let history = History::open_in_memory()?;
-        let root = history.save_conversation("root", "anthropic/claude-3.5-sonnet", &[message("user", "root")])?;
-        let unrelated = history.save_conversation("unrelated", "openai/gpt-4o", &[message("user", "unrelated")])?;
+        let root = history.save_conversation(
+            "root",
+            "anthropic/claude-3.5-sonnet",
+            &[message("user", "root")],
+        )?;
+        let unrelated = history.save_conversation(
+            "unrelated",
+            "openai/gpt-4o",
+            &[message("user", "unrelated")],
+        )?;
         let first = history.fork_conversation(root, "openai/gpt-4o", &[])?;
         let second = history.fork_conversation(root, "openai/gpt-4", &[])?;
         let nested = history.fork_conversation(first, "anthropic/claude-3.5-sonnet", &[])?;
