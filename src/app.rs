@@ -400,7 +400,9 @@ impl App {
         if self.pending.is_none() {
             return false;
         }
-        self.notice("A reply is still streaming. Wait for it to finish or press Ctrl+C to cancel it.");
+        self.notice(
+            "A reply is still streaming. Wait for it to finish or press Ctrl+C to cancel it.",
+        );
         true
     }
 
@@ -557,7 +559,10 @@ impl App {
             return;
         }
         match clipboard::copy_to_clipboard(&blocks.join("\n\n")) {
-            Ok(()) => self.notice(format!("{} code block(s) copied to clipboard.", blocks.len())),
+            Ok(()) => self.notice(format!(
+                "{} code block(s) copied to clipboard.",
+                blocks.len()
+            )),
             Err(error) => self.notice(format!("Error copying to clipboard: {error}")),
         }
     }
@@ -804,7 +809,12 @@ mod tests {
     #[tokio::test]
     async fn fork_sends_later_replies_to_a_child_on_the_new_model() -> Result<()> {
         let mut app = test_app()?;
-        exchange(&mut app, "Explain ownership", &["Every value has a single owner."]).await?;
+        exchange(
+            &mut app,
+            "Explain ownership",
+            &["Every value has a single owner."],
+        )
+        .await?;
         let parent = app
             .current_conversation_id
             .context("the first reply should start a saved conversation")?;
@@ -816,7 +826,12 @@ mod tests {
         assert_ne!(fork, parent);
         assert_eq!(app.current_model, "openai/gpt-4o");
 
-        exchange(&mut app, "Now explain borrowing", &["A reference borrows a value."]).await?;
+        exchange(
+            &mut app,
+            "Now explain borrowing",
+            &["A reference borrows a value."],
+        )
+        .await?;
 
         let (forked, fork_messages) = app.history.load_conversation(fork)?;
         assert_eq!(forked.parent_id, Some(parent));
@@ -839,7 +854,8 @@ mod tests {
     #[tokio::test]
     async fn ctrl_c_cancels_a_streaming_reply_and_keeps_what_arrived() -> Result<()> {
         let mut app = test_app()?;
-        app.messages.push(Message::new("user", "Write a long story"));
+        app.messages
+            .push(Message::new("user", "Write a long story"));
         let task = tokio::spawn(std::future::pending::<()>());
         let sender = start_reply(&mut app, task.abort_handle());
 
