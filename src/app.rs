@@ -185,22 +185,18 @@ impl App {
                 self.input.clear();
                 self.input.push('/');
             }
-            KeyCode::Char('n') => {
-                if !self.search_results.is_empty() {
-                    self.current_search_index =
-                        (self.current_search_index + 1) % self.search_results.len();
-                    self.jump_to_message(self.search_results[self.current_search_index]);
-                }
+            KeyCode::Char('n') if !self.search_results.is_empty() => {
+                self.current_search_index =
+                    (self.current_search_index + 1) % self.search_results.len();
+                self.jump_to_message(self.search_results[self.current_search_index]);
             }
-            KeyCode::Char('N') => {
-                if !self.search_results.is_empty() {
-                    if self.current_search_index == 0 {
-                        self.current_search_index = self.search_results.len() - 1;
-                    } else {
-                        self.current_search_index -= 1;
-                    }
-                    self.jump_to_message(self.search_results[self.current_search_index]);
+            KeyCode::Char('N') if !self.search_results.is_empty() => {
+                if self.current_search_index == 0 {
+                    self.current_search_index = self.search_results.len() - 1;
+                } else {
+                    self.current_search_index -= 1;
                 }
+                self.jump_to_message(self.search_results[self.current_search_index]);
             }
             _ => {}
         }
