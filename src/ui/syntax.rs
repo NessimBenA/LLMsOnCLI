@@ -18,19 +18,28 @@ lazy_static! {
 /// Convert syntect Style to ratatui Style
 fn syntect_to_ratatui_style(style: SyntectStyle) -> Style {
     let fg = Color::Rgb(style.foreground.r, style.foreground.g, style.foreground.b);
-    
+
     let mut ratatui_style = Style::default().fg(fg);
-    
-    if style.font_style.contains(syntect::highlighting::FontStyle::BOLD) {
+
+    if style
+        .font_style
+        .contains(syntect::highlighting::FontStyle::BOLD)
+    {
         ratatui_style = ratatui_style.add_modifier(Modifier::BOLD);
     }
-    if style.font_style.contains(syntect::highlighting::FontStyle::ITALIC) {
+    if style
+        .font_style
+        .contains(syntect::highlighting::FontStyle::ITALIC)
+    {
         ratatui_style = ratatui_style.add_modifier(Modifier::ITALIC);
     }
-    if style.font_style.contains(syntect::highlighting::FontStyle::UNDERLINE) {
+    if style
+        .font_style
+        .contains(syntect::highlighting::FontStyle::UNDERLINE)
+    {
         ratatui_style = ratatui_style.add_modifier(Modifier::UNDERLINED);
     }
-    
+
     ratatui_style
 }
 
@@ -40,22 +49,20 @@ pub fn highlight_code_block(code: &str, language: &str) -> Vec<Line<'static>> {
         .find_syntax_by_token(language)
         .or_else(|| SYNTAX_SET.find_syntax_by_extension(language))
         .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
-    
+
     let theme = &THEME_SET.themes["base16-ocean.dark"];
     let mut highlighter = HighlightLines::new(syntax, theme);
-    
+
     let mut lines = Vec::new();
-    
+
     for line in LinesWithEndings::from(code) {
         let highlighted = highlighter.highlight_line(line, &SYNTAX_SET).unwrap();
-        
+
         let spans: Vec<Span> = highlighted
             .into_iter()
-            .map(|(style, text)| {
-                Span::styled(text.to_string(), syntect_to_ratatui_style(style))
-            })
+            .map(|(style, text)| Span::styled(text.to_string(), syntect_to_ratatui_style(style)))
             .collect();
-        
+
         // Remove trailing newline from the last span if present
         let mut spans = spans;
         if let Some(last_span) = spans.last_mut() {
@@ -65,10 +72,10 @@ pub fn highlight_code_block(code: &str, language: &str) -> Vec<Line<'static>> {
                 last_span.content = content.into();
             }
         }
-        
+
         lines.push(Line::from(spans));
     }
-    
+
     lines
 }
 
@@ -77,7 +84,7 @@ pub fn extract_code_blocks(text: &str) -> Vec<(Option<String>, String, usize, us
     let mut blocks = Vec::new();
     let lines: Vec<&str> = text.lines().collect();
     let mut i = 0;
-    
+
     while i < lines.len() {
         if lines[i].starts_with("```") {
             let start_line = i;
@@ -87,15 +94,15 @@ pub fn extract_code_blocks(text: &str) -> Vec<(Option<String>, String, usize, us
             } else {
                 Some(language)
             };
-            
+
             i += 1;
             let code_start = i;
-            
+
             // Find the closing ```
             while i < lines.len() && !lines[i].starts_with("```") {
                 i += 1;
             }
-            
+
             if i < lines.len() {
                 let code = lines[code_start..i].join("\n");
                 blocks.push((language, code, start_line, i));
@@ -103,7 +110,7 @@ pub fn extract_code_blocks(text: &str) -> Vec<(Option<String>, String, usize, us
         }
         i += 1;
     }
-    
+
     blocks
 }
 
