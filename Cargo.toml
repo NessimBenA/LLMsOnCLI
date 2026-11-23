@@ -2,7 +2,7 @@
 name = "llm-chat"
 version = "0.1.0"
 edition = "2021"
-authors = ["Cline"]
+authors = ["Nessim Ben Abbes"]
 description = "A fast, minimal terminal app for LLM interactions"
 license = "MIT"
 
